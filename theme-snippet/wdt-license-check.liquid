@@ -1,0 +1,111 @@
+{% comment %}
+  wdt-license-check.liquid
+  ========================
+  Drop this file into: snippets/wdt-license-check.liquid
+  Then include it in: layout/theme.liquid (inside <body>, before </body>)
+
+  Usage in theme.liquid:
+    {% render 'wdt-license-check' %}
+
+  How it works:
+  - Reads shop metafield: wdt_licenses.verified
+  - If "true"  → nothing shown, theme works normally
+  - If missing → top banner shown asking merchant to verify
+  - Banner links to the WDT License Verifier app in their Shopify Admin
+
+  The metafield is written by the WDT License Verifier Shopify app
+  after a valid ThemeForest purchase code is confirmed via Envato API.
+{% endcomment %}
+
+{%- assign wdt_verified = shop.metafields.wdt_licenses.verified.value -%}
+
+{%- unless wdt_verified == "true" -%}
+
+<style>
+  #wdt-license-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 99999;
+    background-color: #1a1a2e;
+    color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    flex-wrap: wrap;
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  #wdt-license-banner .wdt-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  #wdt-license-banner .wdt-message {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  #wdt-license-banner .wdt-message strong {
+    color: #ffd700;
+  }
+
+  #wdt-license-banner .wdt-verify-btn {
+    display: inline-block;
+    background: #ffd700;
+    color: #1a1a2e;
+    padding: 8px 18px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 13px;
+    white-space: nowrap;
+    transition: background 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  #wdt-license-banner .wdt-verify-btn:hover {
+    background: #ffec6e;
+  }
+
+  /* Push page content down so banner doesn't overlap */
+  body {
+    padding-top: 52px !important;
+  }
+
+  @media (max-width: 600px) {
+    #wdt-license-banner {
+      padding: 10px 14px;
+      font-size: 13px;
+    }
+    body {
+      padding-top: 80px !important;
+    }
+  }
+</style>
+
+<div id="wdt-license-banner" role="alert" aria-live="polite">
+  <span class="wdt-icon">⚠️</span>
+  <span class="wdt-message">
+    <strong>Theme license not verified.</strong>
+    This store is using a buddhathemes theme that requires license activation.
+    Please verify your ThemeForest purchase code to remove this notice.
+  </span>
+  <a
+    href="/admin/apps/wdt-license-verifier"
+    class="wdt-verify-btn"
+    target="_blank"
+    rel="noopener"
+  >
+    Verify License →
+  </a>
+</div>
+
+{%- endunless -%}

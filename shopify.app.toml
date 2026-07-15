@@ -1,0 +1,26 @@
+name = "WDT License Verifier"
+client_id = "your_shopify_api_key_here"
+application_url = "https://your-app-url.com"
+embedded = true
+
+[access_scopes]
+# read_themes — identify installed theme
+# write_metaobjects, write_own_metafields — write verified flag to shop
+scopes = "read_themes,write_own_metafields"
+
+[auth]
+redirect_urls = [
+  "https://your-app-url.com/auth/callback",
+  "https://your-app-url.com/auth/shopify/callback",
+  "https://your-app-url.com/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2024-01"
+
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "/webhooks"
+
+[pos]
+embedded = false
