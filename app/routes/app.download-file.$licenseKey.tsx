@@ -3,8 +3,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import {
   getLicenseByCode,
-  getThemeItem,
-  logDownload,
+  getThemeItem, 
 } from "../lib/license.server";
 
 /**

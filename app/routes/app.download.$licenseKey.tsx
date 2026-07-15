@@ -17,10 +17,12 @@ import { authenticate } from "../shopify.server";
 import {
   getLicenseByCode,
   getThemeItem,
-  logDownload,
+} from "../lib/license.server";
+
+import {
   isSupportActive,
   formatDate,
-} from "../lib/license.server";
+} from "../lib/date";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -121,7 +123,7 @@ export default function DownloadPage() {
                 <Banner tone="info" title="Download link not available">
                   <p>
                     Your license is valid. Please contact{" "}
-                    <strong>{process.env.SUPPORT_EMAIL || "support@buddhathemes.com"}</strong> with
+                    <strong>support@buddhathemes.com</strong>with
                     your license key <strong>{license.licenseKey}</strong> to receive the latest
                     theme files.
                   </p>
@@ -143,7 +145,7 @@ export default function DownloadPage() {
                     <strong>{formatDate(new Date(license.supportedUntil))}</strong>.
                   </Text>
                   <Button
-                    url={process.env.SUPPORT_URL || "https://buddhathemes.com/support"}
+                    url="https://buddhathemes.com/support"
                     external
                     variant="primary"
                   >
