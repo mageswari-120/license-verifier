@@ -1,6 +1,6 @@
 name = "WDT License Verifier"
-client_id = "your_shopify_api_key_here"
-application_url = "https://your-app-url.com"
+client_id = "a4e00b4439e1827e34bf03c4bd1ce21d"
+application_url = "https://license-verifier-e2w0.onrender.com"
 embedded = true
 
 [access_scopes]
@@ -10,9 +10,9 @@ scopes = "read_themes,write_own_metafields"
 
 [auth]
 redirect_urls = [
-  "https://your-app-url.com/auth/callback",
-  "https://your-app-url.com/auth/shopify/callback",
-  "https://your-app-url.com/api/auth/callback"
+  "https://license-verifier-e2w0.onrender.com/auth/callback",
+  "https://license-verifier-e2w0.onrender.com/auth/shopify/callback",
+  "https://license-verifier-e2w0.onrender.com/api/auth/callback"
 ]
 
 [webhooks]
