@@ -16,7 +16,8 @@ import {
   Divider,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
-import { getLicensesForShop, isSupportActive, formatDate } from "../lib/license.server";
+import { getLicensesForShop } from "../lib/license.server";
+import { formatDate, isSupportActive } from "../lib/date";
 import { getShopLicenseStatus } from "../lib/metafield.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {

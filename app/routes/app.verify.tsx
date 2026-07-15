@@ -25,8 +25,9 @@ import { verifyPurchaseCode, getErrorMessage } from "../lib/envato.server";
 import {
   isCodeAlreadyRegistered,
   upsertLicense,
-  formatDate,
 } from "../lib/license.server";
+
+import { formatDate } from "../lib/date";
 import { setShopLicenseVerified } from "../lib/metafield.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
