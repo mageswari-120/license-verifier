@@ -6,7 +6,7 @@ embedded = true
 [access_scopes]
 # read_themes — identify installed theme
 # write_metaobjects, write_own_metafields — write verified flag to shop
-scopes = "read_themes,write_own_metafields"
+scopes = "read_themes,write_metaobjects"
 
 [auth]
 redirect_urls = [
