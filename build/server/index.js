@@ -1,61 +1,61 @@
 var _a;
 import { jsx, jsxs, Fragment } from "react/jsx-runtime";
-import { PassThrough } from "node:stream";
-import { createReadableStreamFromReadable, redirect, json } from "@remix-run/node";
-import { RemixServer, Meta, Links, Outlet, ScrollRestoration, Scripts, useLoaderData, useNavigate, useActionData, useNavigation, Form, Link, useRouteError } from "@remix-run/react";
-import * as isbotModule from "isbot";
+import { PassThrough } from "stream";
 import { renderToPipeableStream } from "react-dom/server";
+import { RemixServer, Meta, Links, Outlet, ScrollRestoration, Scripts, useLoaderData, useNavigate, useActionData, useNavigation, Form, Link, useRouteError } from "@remix-run/react";
+import { createReadableStreamFromReadable, redirect, json } from "@remix-run/node";
+import { isbot } from "isbot";
 import "@shopify/shopify-app-remix/adapters/node";
 import { shopifyApp, DeliveryMethod, AppDistribution, LATEST_API_VERSION, boundary } from "@shopify/shopify-app-remix/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import { PrismaClient } from "@prisma/client";
 import crypto from "crypto";
-import { Page, Banner, Layout, Card, BlockStack, InlineStack, Text, Badge, Divider, Button, Box, List, TextField, Spinner, CalloutCard, EmptyState, DataTable } from "@shopify/polaris";
+import { Page, Banner, Layout, Card, BlockStack, InlineStack, Text, Badge, Divider, Button, Box, List, TextField, Spinner, CalloutCard } from "@shopify/polaris";
 import { useState } from "react";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { NavMenu } from "@shopify/app-bridge-react";
-const ABORT_DELAY = 5e3;
-function handleRequest(request, responseStatusCode, responseHeaders, remixContext, loadContext) {
-  let prohibitOutOfOrderStreaming = isBotRequest(request.headers.get("user-agent")) || remixContext.isSpaMode;
-  return prohibitOutOfOrderStreaming ? handleBotRequest(
-    request,
-    responseStatusCode,
-    responseHeaders,
-    remixContext
-  ) : handleBrowserRequest(
-    request,
-    responseStatusCode,
-    responseHeaders,
-    remixContext
-  );
-}
-function isBotRequest(userAgent) {
-  if (!userAgent) {
-    return false;
-  }
-  if ("isbot" in isbotModule && typeof isbotModule.isbot === "function") {
-    return isbotModule.isbot(userAgent);
-  }
-  if ("default" in isbotModule && typeof isbotModule.default === "function") {
-    return isbotModule.default(userAgent);
-  }
-  return false;
-}
-function handleBotRequest(request, responseStatusCode, responseHeaders, remixContext) {
+const prisma = new PrismaClient();
+const shopify = shopifyApp({
+  apiKey: process.env.SHOPIFY_API_KEY,
+  apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
+  apiVersion: LATEST_API_VERSION,
+  scopes: ((_a = process.env.SCOPES) == null ? void 0 : _a.split(",")) ?? ["read_themes"],
+  appUrl: process.env.SHOPIFY_APP_URL || "",
+  authPathPrefix: "/auth",
+  sessionStorage: new PrismaSessionStorage(prisma),
+  distribution: AppDistribution.SingleMerchant,
+  webhooks: {
+    APP_UNINSTALLED: {
+      deliveryMethod: DeliveryMethod.Http,
+      callbackUrl: "/webhooks"
+    }
+  },
+  hooks: {
+    afterAuth: async ({ session }) => {
+      shopify.registerWebhooks({ session });
+    }
+  },
+  future: {
+    unstable_newEmbeddedAuthStrategy: true
+  },
+  ...process.env.SHOP_CUSTOM_DOMAIN ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] } : {}
+});
+const addDocumentResponseHeaders = shopify.addDocumentResponseHeaders;
+const authenticate = shopify.authenticate;
+shopify.unauthenticated;
+shopify.login;
+shopify.registerWebhooks;
+shopify.sessionStorage;
+const streamTimeout = 5e3;
+async function handleRequest(request, responseStatusCode, responseHeaders, remixContext) {
+  addDocumentResponseHeaders(request, responseHeaders);
+  const userAgent = request.headers.get("user-agent");
+  const callbackName = isbot(userAgent ?? "") ? "onAllReady" : "onShellReady";
   return new Promise((resolve, reject) => {
-    let shellRendered = false;
     const { pipe, abort } = renderToPipeableStream(
-      /* @__PURE__ */ jsx(
-        RemixServer,
-        {
-          context: remixContext,
-          url: request.url,
-          abortDelay: ABORT_DELAY
-        }
-      ),
+      /* @__PURE__ */ jsx(RemixServer, { context: remixContext, url: request.url }),
       {
-        onAllReady() {
-          shellRendered = true;
+        [callbackName]: () => {
           const body = new PassThrough();
           const stream = createReadableStreamFromReadable(body);
           responseHeaders.set("Content-Type", "text/html");
@@ -72,62 +72,21 @@ function handleBotRequest(request, responseStatusCode, responseHeaders, remixCon
         },
         onError(error) {
           responseStatusCode = 500;
-          if (shellRendered) {
-            console.error(error);
-          }
+          console.error(error);
         }
       }
     );
-    setTimeout(abort, ABORT_DELAY);
-  });
-}
-function handleBrowserRequest(request, responseStatusCode, responseHeaders, remixContext) {
-  return new Promise((resolve, reject) => {
-    let shellRendered = false;
-    const { pipe, abort } = renderToPipeableStream(
-      /* @__PURE__ */ jsx(
-        RemixServer,
-        {
-          context: remixContext,
-          url: request.url,
-          abortDelay: ABORT_DELAY
-        }
-      ),
-      {
-        onShellReady() {
-          shellRendered = true;
-          const body = new PassThrough();
-          const stream = createReadableStreamFromReadable(body);
-          responseHeaders.set("Content-Type", "text/html");
-          resolve(
-            new Response(stream, {
-              headers: responseHeaders,
-              status: responseStatusCode
-            })
-          );
-          pipe(body);
-        },
-        onShellError(error) {
-          reject(error);
-        },
-        onError(error) {
-          responseStatusCode = 500;
-          if (shellRendered) {
-            console.error(error);
-          }
-        }
-      }
-    );
-    setTimeout(abort, ABORT_DELAY);
+    setTimeout(abort, streamTimeout + 1e3);
   });
 }
 const entryServer = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  default: handleRequest
+  default: handleRequest,
+  streamTimeout
 }, Symbol.toStringTag, { value: "Module" }));
 const links$1 = () => [];
 function App$1() {
-  return /* @__PURE__ */ jsxs("html", { children: [
+  return /* @__PURE__ */ jsxs("html", { lang: "en", children: [
     /* @__PURE__ */ jsxs("head", { children: [
       /* @__PURE__ */ jsx("meta", { charSet: "utf-8" }),
       /* @__PURE__ */ jsx("meta", { name: "viewport", content: "width=device-width,initial-scale=1" }),
@@ -154,38 +113,6 @@ const route0 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProper
   default: App$1,
   links: links$1
 }, Symbol.toStringTag, { value: "Module" }));
-const prisma = new PrismaClient();
-const shopify = shopifyApp({
-  apiKey: process.env.SHOPIFY_API_KEY,
-  apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
-  apiVersion: LATEST_API_VERSION,
-  scopes: ((_a = process.env.SCOPES) == null ? void 0 : _a.split(",")) ?? ["read_themes", "write_own_metafields"],
-  appUrl: process.env.SHOPIFY_APP_URL || "",
-  authPathPrefix: "/auth",
-  sessionStorage: new PrismaSessionStorage(prisma),
-  distribution: AppDistribution.AppStore,
-  webhooks: {
-    APP_UNINSTALLED: {
-      deliveryMethod: DeliveryMethod.Http,
-      callbackUrl: "/webhooks"
-    }
-  },
-  hooks: {
-    afterAuth: async ({ session }) => {
-      shopify.registerWebhooks({ session });
-    }
-  },
-  future: {
-    unstable_newEmbeddedAuthStrategy: true
-  },
-  ...process.env.SHOP_CUSTOM_DOMAIN ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] } : {}
-});
-shopify.addDocumentResponseHeaders;
-const authenticate = shopify.authenticate;
-shopify.unauthenticated;
-shopify.login;
-shopify.registerWebhooks;
-shopify.sessionStorage;
 const db = new PrismaClient();
 const LICENSE_SECRET = process.env.LICENSE_SECRET || "changeme";
 function generateLicenseKey(purchaseCode, shopDomain) {
@@ -840,192 +767,37 @@ const route3 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProper
 }, Symbol.toStringTag, { value: "Module" }));
 async function loader$2({ request }) {
   const { session, admin } = await authenticate.admin(request);
-  const [licenses, licenseStatus] = await Promise.all([
-    getLicensesForShop(session.shop),
-    getShopLicenseStatus(admin)
-  ]);
-  return json({
-    shop: session.shop,
-    storeVerified: licenseStatus.verified,
-    licenseDetail: licenseStatus.detail,
-    licenses: licenses.map((l) => {
-      var _a2;
-      return {
-        ...l,
-        soldAt: l.soldAt.toISOString(),
-        supportedUntil: l.supportedUntil.toISOString(),
-        verifiedAt: l.verifiedAt.toISOString(),
-        supportActive: isSupportActive(l.supportedUntil),
-        lastDownload: ((_a2 = l.downloads[0]) == null ? void 0 : _a2.version) ?? null
-      };
-    })
-  });
+  try {
+    const licenses = await getLicensesForShop(session.shop);
+    const licenseStatus = await getShopLicenseStatus(admin);
+    return json({
+      shop: session.shop,
+      storeVerified: licenseStatus.verified,
+      licenseDetail: licenseStatus.detail,
+      licenses: licenses.map((l) => {
+        var _a2;
+        return {
+          ...l,
+          soldAt: l.soldAt.toISOString(),
+          supportedUntil: l.supportedUntil.toISOString(),
+          verifiedAt: l.verifiedAt.toISOString(),
+          supportActive: isSupportActive(l.supportedUntil),
+          lastDownload: ((_a2 = l.downloads[0]) == null ? void 0 : _a2.version) ?? null
+        };
+      })
+    });
+  } catch (error) {
+    console.error("Dashboard Loader Error:", error);
+    return json({
+      shop: session.shop,
+      storeVerified: false,
+      licenseDetail: null,
+      licenses: []
+    });
+  }
 }
 function Index() {
-  const { shop, licenses, storeVerified, licenseDetail } = useLoaderData();
-  const navigate = useNavigate();
-  const hasLicenses = licenses.length > 0;
-  const activeCount = licenses.filter((l) => l.supportActive).length;
-  return /* @__PURE__ */ jsx(
-    Page,
-    {
-      title: "WDT Theme License Manager",
-      subtitle: "Manage your buddhathemes Shopify theme licenses",
-      primaryAction: {
-        content: "Register New License",
-        onAction: () => navigate("/app/verify")
-      },
-      children: /* @__PURE__ */ jsxs(Layout, { children: [
-        /* @__PURE__ */ jsx(Layout.Section, { children: storeVerified ? /* @__PURE__ */ jsx(
-          Banner,
-          {
-            title: "✅ Store license verified — theme is active",
-            tone: "success",
-            children: /* @__PURE__ */ jsxs("p", { children: [
-              "Your storefront license banner is hidden. Theme is fully active on ",
-              /* @__PURE__ */ jsx("strong", { children: shop }),
-              ".",
-              licenseDetail && /* @__PURE__ */ jsxs(Fragment, { children: [
-                " License key: ",
-                /* @__PURE__ */ jsx("strong", { children: licenseDetail.licenseKey })
-              ] })
-            ] })
-          }
-        ) : /* @__PURE__ */ jsx(
-          Banner,
-          {
-            title: "⚠️ License not verified — your storefront is showing a warning banner",
-            tone: "critical",
-            action: {
-              content: "Verify License Now",
-              onAction: () => navigate("/app/verify")
-            },
-            children: /* @__PURE__ */ jsxs("p", { children: [
-              "Your theme is installed on ",
-              /* @__PURE__ */ jsx("strong", { children: shop }),
-              " but the license has not been verified. Visitors to your store will see a warning banner until you register your ThemeForest purchase code."
-            ] })
-          }
-        ) }),
-        hasLicenses && /* @__PURE__ */ jsx(Layout.Section, { children: /* @__PURE__ */ jsx(
-          Banner,
-          {
-            title: `${licenses.length} theme${licenses.length > 1 ? "s" : ""} registered for ${shop}`,
-            tone: activeCount === licenses.length ? "success" : "warning",
-            children: /* @__PURE__ */ jsxs("p", { children: [
-              activeCount,
-              " active support ",
-              activeCount === 1 ? "plan" : "plans",
-              ".",
-              " ",
-              licenses.length - activeCount > 0 && `${licenses.length - activeCount} license(s) with expired support.`
-            ] })
-          }
-        ) }),
-        /* @__PURE__ */ jsx(Layout.Section, { children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
-          /* @__PURE__ */ jsxs(InlineStack, { align: "space-between", blockAlign: "center", children: [
-            /* @__PURE__ */ jsx(Text, { variant: "headingMd", as: "h2", children: "Registered Licenses" }),
-            /* @__PURE__ */ jsx(Button, { variant: "primary", onClick: () => navigate("/app/verify"), children: "+ Register License" })
-          ] }),
-          /* @__PURE__ */ jsx(Divider, {}),
-          !hasLicenses ? /* @__PURE__ */ jsx(
-            EmptyState,
-            {
-              heading: "No licenses registered yet",
-              image: "https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png",
-              action: {
-                content: "Register Your First License",
-                onAction: () => navigate("/app/verify")
-              },
-              children: /* @__PURE__ */ jsx("p", { children: "Enter your ThemeForest purchase code to verify your theme license, unlock updates, and get support access." })
-            }
-          ) : /* @__PURE__ */ jsx(
-            DataTable,
-            {
-              columnContentTypes: ["text", "text", "text", "text", "text", "text"],
-              headings: [
-                "Theme",
-                "License Key",
-                "License Type",
-                "Purchased",
-                "Support Until",
-                "Status"
-              ],
-              rows: licenses.map((l) => [
-                l.envatoItemName,
-                /* @__PURE__ */ jsx(
-                  Text,
-                  {
-                    variant: "bodySm",
-                    as: "span",
-                    tone: "subdued",
-                    fontWeight: "semibold",
-                    children: l.licenseKey
-                  },
-                  l.licenseKey
-                ),
-                l.licenseType,
-                formatDate(new Date(l.soldAt)),
-                formatDate(new Date(l.supportedUntil)),
-                /* @__PURE__ */ jsx(
-                  Badge,
-                  {
-                    tone: l.supportActive ? "success" : "warning",
-                    children: l.supportActive ? "Support Active" : "Support Expired"
-                  },
-                  l.id
-                )
-              ]),
-              footerContent: `${licenses.length} license(s) registered`
-            }
-          )
-        ] }) }) }),
-        /* @__PURE__ */ jsxs(Layout.Section, { variant: "oneThird", children: [
-          /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "300", children: [
-            /* @__PURE__ */ jsx(Text, { variant: "headingMd", as: "h2", children: "How to find your purchase code" }),
-            /* @__PURE__ */ jsxs(Text, { as: "p", tone: "subdued", children: [
-              "1. Log in to your",
-              " ",
-              /* @__PURE__ */ jsx(Text, { as: "span", fontWeight: "semibold", children: "Envato Market" }),
-              " account"
-            ] }),
-            /* @__PURE__ */ jsxs(Text, { as: "p", tone: "subdued", children: [
-              "2. Go to ",
-              /* @__PURE__ */ jsx(Text, { as: "span", fontWeight: "semibold", children: "Downloads" })
-            ] }),
-            /* @__PURE__ */ jsxs(Text, { as: "p", tone: "subdued", children: [
-              "3. Find your buddhathemes purchase and click",
-              " ",
-              /* @__PURE__ */ jsx(Text, { as: "span", fontWeight: "semibold", children: "License certificate & purchase code" })
-            ] }),
-            /* @__PURE__ */ jsx(Text, { as: "p", tone: "subdued", children: "4. Copy the purchase code (UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)" }),
-            /* @__PURE__ */ jsx(Divider, {}),
-            /* @__PURE__ */ jsx(
-              Button,
-              {
-                url: "https://themeforest.net/downloads",
-                external: true,
-                variant: "plain",
-                children: "Go to Envato Downloads →"
-              }
-            )
-          ] }) }),
-          /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "300", children: [
-            /* @__PURE__ */ jsx(Text, { variant: "headingMd", as: "h2", children: "Need help?" }),
-            /* @__PURE__ */ jsx(Text, { as: "p", tone: "subdued", children: "Contact buddhathemes support with your license key ready." }),
-            /* @__PURE__ */ jsx(
-              Button,
-              {
-                url: process.env.SUPPORT_URL || "https://buddhathemes.com/support",
-                external: true,
-                children: "Contact Support"
-              }
-            )
-          ] }) })
-        ] })
-      ] })
-    }
-  );
+  return /* @__PURE__ */ jsx("h1", { children: "Hello Shopify App" });
 }
 const route4 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
@@ -1089,7 +861,7 @@ const route7 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProper
   links,
   loader
 }, Symbol.toStringTag, { value: "Module" }));
-const serverManifest = { "entry": { "module": "/assets/entry.client-DspBXYVi.js", "imports": ["/assets/components-BNZ-ZKTZ.js"], "css": [] }, "routes": { "root": { "id": "root", "parentId": void 0, "path": "", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": false, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/root-CBmqxnW0.js", "imports": ["/assets/components-BNZ-ZKTZ.js"], "css": [] }, "routes/app.download-file.$licenseKey": { "id": "routes/app.download-file.$licenseKey", "parentId": "routes/app", "path": "download-file/:licenseKey", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.download-file._licenseKey-l0sNRNKZ.js", "imports": [], "css": [] }, "routes/app.download.$licenseKey": { "id": "routes/app.download.$licenseKey", "parentId": "routes/app", "path": "download/:licenseKey", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.download._licenseKey-Cf8_CaNS.js", "imports": ["/assets/components-BNZ-ZKTZ.js", "/assets/date-BnI6bIfi.js", "/assets/context-CvbGp6Bx.js"], "css": [] }, "routes/app.verify": { "id": "routes/app.verify", "parentId": "routes/app", "path": "verify", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.verify-Dh1y7ose.js", "imports": ["/assets/components-BNZ-ZKTZ.js", "/assets/date-BnI6bIfi.js", "/assets/Image-GRIQpsM5.js", "/assets/context-CvbGp6Bx.js"], "css": [] }, "routes/app._index": { "id": "routes/app._index", "parentId": "routes/app", "path": void 0, "index": true, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app._index-DZn1bjOX.js", "imports": ["/assets/components-BNZ-ZKTZ.js", "/assets/date-BnI6bIfi.js", "/assets/Image-GRIQpsM5.js", "/assets/context-CvbGp6Bx.js"], "css": [] }, "routes/webhooks": { "id": "routes/webhooks", "parentId": "root", "path": "webhooks", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": false, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/webhooks-l0sNRNKZ.js", "imports": [], "css": [] }, "routes/auth.$": { "id": "routes/auth.$", "parentId": "root", "path": "auth/*", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/auth._-l0sNRNKZ.js", "imports": [], "css": [] }, "routes/app": { "id": "routes/app", "parentId": "root", "path": "app", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": true, "module": "/assets/app-aph-UoGI.js", "imports": ["/assets/components-BNZ-ZKTZ.js", "/assets/context-CvbGp6Bx.js"], "css": [] } }, "url": "/assets/manifest-054fbaca.js", "version": "054fbaca" };
+const serverManifest = { "entry": { "module": "/assets/entry.client-BYcF86ME.js", "imports": ["/assets/jsx-runtime-BMrMXMSG.js", "/assets/components-C_M7i1r3.js"], "css": [] }, "routes": { "root": { "id": "root", "parentId": void 0, "path": "", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": false, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/root-Bb7oxfoh.js", "imports": ["/assets/jsx-runtime-BMrMXMSG.js", "/assets/components-C_M7i1r3.js"], "css": [] }, "routes/app.download-file.$licenseKey": { "id": "routes/app.download-file.$licenseKey", "parentId": "routes/app", "path": "download-file/:licenseKey", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.download-file._licenseKey-l0sNRNKZ.js", "imports": [], "css": [] }, "routes/app.download.$licenseKey": { "id": "routes/app.download.$licenseKey", "parentId": "routes/app", "path": "download/:licenseKey", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.download._licenseKey-BQmhtLdj.js", "imports": ["/assets/jsx-runtime-BMrMXMSG.js", "/assets/date-CoU5Uvw7.js", "/assets/components-C_M7i1r3.js", "/assets/context-D1t0TB5J.js"], "css": [] }, "routes/app.verify": { "id": "routes/app.verify", "parentId": "routes/app", "path": "verify", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.verify-DM55eiMg.js", "imports": ["/assets/jsx-runtime-BMrMXMSG.js", "/assets/date-CoU5Uvw7.js", "/assets/components-C_M7i1r3.js", "/assets/context-D1t0TB5J.js"], "css": [] }, "routes/app._index": { "id": "routes/app._index", "parentId": "routes/app", "path": void 0, "index": true, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app._index-BD8UrI0D.js", "imports": ["/assets/jsx-runtime-BMrMXMSG.js"], "css": [] }, "routes/webhooks": { "id": "routes/webhooks", "parentId": "root", "path": "webhooks", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": false, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/webhooks-l0sNRNKZ.js", "imports": [], "css": [] }, "routes/auth.$": { "id": "routes/auth.$", "parentId": "root", "path": "auth/*", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/auth._-l0sNRNKZ.js", "imports": [], "css": [] }, "routes/app": { "id": "routes/app", "parentId": "root", "path": "app", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": true, "module": "/assets/app-CspzoOEV.js", "imports": ["/assets/jsx-runtime-BMrMXMSG.js", "/assets/components-C_M7i1r3.js", "/assets/context-D1t0TB5J.js"], "css": [] } }, "url": "/assets/manifest-81ee46f9.js", "version": "81ee46f9" };
 const mode = "production";
 const assetsBuildDirectory = "build\\client";
 const basename = "/";
