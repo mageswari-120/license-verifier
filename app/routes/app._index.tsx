@@ -22,24 +22,34 @@ import { getShopLicenseStatus } from "../lib/metafield.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session, admin } = await authenticate.admin(request);
-  const [licenses, licenseStatus] = await Promise.all([
-    getLicensesForShop(session.shop),
-    getShopLicenseStatus(admin),
-  ]);
 
-  return json({
-    shop: session.shop,
-    storeVerified: licenseStatus.verified,
-    licenseDetail: licenseStatus.detail,
-    licenses: licenses.map((l) => ({
-      ...l,
-      soldAt: l.soldAt.toISOString(),
-      supportedUntil: l.supportedUntil.toISOString(),
-      verifiedAt: l.verifiedAt.toISOString(),
-      supportActive: isSupportActive(l.supportedUntil),
-      lastDownload: l.downloads[0]?.version ?? null,
-    })),
-  });
+  try {
+    const licenses = await getLicensesForShop(session.shop);
+    const licenseStatus = await getShopLicenseStatus(admin);
+
+    return json({
+      shop: session.shop,
+      storeVerified: licenseStatus.verified,
+      licenseDetail: licenseStatus.detail,
+      licenses: licenses.map((l) => ({
+        ...l,
+        soldAt: l.soldAt.toISOString(),
+        supportedUntil: l.supportedUntil.toISOString(),
+        verifiedAt: l.verifiedAt.toISOString(),
+        supportActive: isSupportActive(l.supportedUntil),
+        lastDownload: l.downloads[0]?.version ?? null,
+      })),
+    });
+  } catch (error) {
+    console.error("Dashboard Loader Error:", error);
+
+    return json({
+      shop: session.shop,
+      storeVerified: false,
+      licenseDetail: null,
+      licenses: [],
+    });
+  }
 }
 
 export default function Index() {
